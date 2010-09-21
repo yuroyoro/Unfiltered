@@ -5,4 +5,5 @@ class Plugins(info: ProjectInfo) extends PluginDefinition(info) {
   val snuggletex_repo = "snuggletex_repo" at "http://www2.ph.ed.ac.uk/maven2"
   val sxr_publish = "net.databinder" % "sxr-publish" % "0.2.0"
   val posterous = "net.databinder" % "posterous-sbt" % "0.1.6"
+  val akkaPlugin = "se.scalablesolutions.akka" % "akka-sbt-plugin" % "0.10"
 }

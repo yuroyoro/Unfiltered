@@ -74,6 +74,13 @@ class Unfiltered(info: ProjectInfo) extends ParentProject(info) with posterous.P
     override def repositories = Set(ScalaToolsSnapshots)
   }, library)
   
+  lazy val bayeux = project("bayeux", "Unfiltered Bayeux", 
+    new UnfilteredModule(_) with Only28 with IntegrationTesting with AkkaProject{
+        val ccstm = "edu.stanford.ppl" % "ccstm" % "0.2.1-for-scala-2.8.0"
+        val ccstmRepo = "CCSTM Release Repository at PPL" at "http://ppl.stanford.edu/ccstm/repo-releases"
+        val joda_time = "joda-time" % "joda-time" % "1.6"
+  })
+  
   def specsDependency =
     if (buildScalaVersion startsWith "2.7.")
       "org.scala-tools.testing" % "specs" % "1.6.2.2"

@@ -3,14 +3,18 @@ package unfiltered.bayeux
 //akka imports
 import se.scalablesolutions.akka.actor.TypedActor
 
+//scala
+import scala.collection.immutable.Queue
+
 trait Client{
   def id: String
-  def id_=(clientId: String): Unit
-  def enqueue(message: Message): Unit
-  def removeSubscription(channel: Channel): Unit
+  private[bayeux] def id_=(clientId: String): Unit
+  def enqueue(message: Message, clientId: Option[String]): Unit
+  def messages: Queue[Message]
+  private[bayeux] def removeSubscription(channel: Channel): Unit
   def disconnect: Unit
-  def addSubscription(channel: Channel): Unit
-  def getSubscriptions(): Set[Channel]
+  private[bayeux] def addSubscription(channel: Channel): Unit
+  def subscriptions(): Set[Channel]
 }
 
 object Client{
@@ -48,21 +52,35 @@ object Client{
     client
   }
   
+  def unapply(client: Client): Option[String] = Some(client.id)
+  
   private class ClientImpl extends TypedActor with Client{
-    import scala.collection.immutable.Queue
     
-    private var subscriptions: Set[Channel] = Set[Channel]()
-    private var messages: Queue[Message] = Queue[Message]()
+    private var channels: Set[Channel] = Set[Channel]()
+    private var messageQueue: Queue[Message] = Queue[Message]()
     
     def id = self.id
-    def id_=(clientId: String) = self.id = clientId
-    def enqueue(message: Message): Unit = messages = messages enqueue message
-    def removeSubscription(channel: Channel): Unit = subscriptions = subscriptions - channel
+    private[bayeux] def id_=(clientId: String) = self.id = clientId
+    def messages = messageQueue
+    private[bayeux] def removeSubscription(channel: Channel): Unit = channels = channels - channel
+    
     def disconnect: Unit = {
-      subscriptions.foreach(_.unsubscribe(this))
+      channels.foreach(_.unsubscribe(this))
       self.stop
     }
-    def addSubscription(channel: Channel): Unit = subscriptions = subscriptions + channel
-    def getSubscriptions(): Set[Channel] = subscriptions
+    
+    def addSubscription(channel: Channel): Unit = channels = channels + channel
+    def subscriptions(): Set[Channel] = channels
+    
+    def enqueue(message: Message, clientId: Option[String]): Unit = {
+      clientId match {
+        case Some(id) if id != self.id => messageQueue = messageQueue enqueue message
+        case None => messageQueue = messageQueue enqueue message
+        case _ => () // do nothing if the message is from this client, because the message gets written immediately back to the client
+      }
+    }
+    
+    private def flush(message: Message): Unit = ()
+    
   }
 }
