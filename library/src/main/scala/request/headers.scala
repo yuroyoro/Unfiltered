@@ -1,20 +1,16 @@
 package unfiltered.request
 
-import javax.servlet.http.HttpServletRequest
-
+/** Note that extractors based on this ignore anything beyond a semicolon in a header */
 class RequestHeader(val name: String) {
-  def unapply(req: HttpServletRequest) = {
-    def split(raw: String): List[String] = raw.split(",") map {
+  def unapply[T](req: HttpRequest[T]) = {
+    def split(raw: String) = raw.split(",") map {
       _.trim.takeWhile { _ != ';' } mkString
-    } toList
+    }
     
-    def headers(e: java.util.Enumeration[_]): List[String] =
-      if (e.hasMoreElements) e.nextElement match {
-        case v: String => split(v) ++ headers(e)
-        case _ => headers(e)
-      } else Nil
+    def headers(e: Iterator[String]): List[String] =
+      List.fromIterator(e).flatMap(split)
     
-    headers(req.getHeaders(name)) match {
+    headers(req.headers(name)) match {
       case Nil => None
       case hs => Some(hs, req)
     }
@@ -46,3 +42,13 @@ object TE extends RequestHeader("TE")
 object Upgrade extends RequestHeader("Upgrade")
 object UserAgent extends RequestHeader("User-Agent")
 object Via extends RequestHeader("Via")
+
+object Charset {
+  val Setting = """.*;.*\bcharset=(\S+).*""".r
+  def unapply[T](req: HttpRequest[T]) = {
+    List.fromIterator(req.headers(RequestContentType.name)).flatMap {
+      case Setting(cs) => (cs, req) :: Nil
+      case _ => Nil
+    }.firstOption
+  }
+}

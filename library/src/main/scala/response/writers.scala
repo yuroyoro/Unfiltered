@@ -1,10 +1,9 @@
 package unfiltered.response
 
-import javax.servlet.http.HttpServletResponse
 import java.io.PrintWriter
 
 trait ResponseWriter extends Responder {
-  def respond(res: HttpServletResponse) {
+  def respond[T](res: HttpResponse[T]) {
     val writer = res.getWriter()
     try { write(writer) }
     finally { writer.close() }

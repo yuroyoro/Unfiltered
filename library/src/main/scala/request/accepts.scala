@@ -8,8 +8,8 @@ object Accepts {
 
     val ext: String
 
-    def unapply(r: javax.servlet.http.HttpServletRequest) = {
-      val pathSuffix = r.getRequestURI.substring(r.getContextPath.length).split("[.]").lastOption
+    def unapply[T](r: HttpRequest[T]) = {
+      val pathSuffix = r.requestURI.substring(r.contextPath.length).split("[.]").lastOption
       r match {
         case Accept(values, _) =>
           if(!values.filter(_.equalsIgnoreCase(contentType)).isEmpty) Some(r)

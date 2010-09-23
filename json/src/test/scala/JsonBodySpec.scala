@@ -2,14 +2,14 @@ package unfiltered.request
 
 import org.specs._
 
-object JsonBodySpec extends Specification  with unfiltered.spec.Served {
+object JsonBodySpec extends Specification  with unfiltered.spec.jetty.Served {
   import unfiltered.response._
   import unfiltered.request._
   import unfiltered.request.{Path => UFPath}
   
   import dispatch._
 
-  class TestPlan extends unfiltered.Planify({
+  class TestPlan extends unfiltered.filter.Planify({
     case POST(UFPath("/", JsonBody(js, _))) => ResponseString(js match {
       case  net.liftweb.json.JsonAST.JArray(a :: b :: Nil) => "array of 2"
       case _ => "expected json array of 2"

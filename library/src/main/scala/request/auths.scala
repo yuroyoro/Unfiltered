@@ -3,10 +3,10 @@ package unfiltered.request
 /** Basic HTTP Authentication extractor */
 object BasicAuth {
   import org.apache.commons.codec.binary.Base64.{decodeBase64}
-  import javax.servlet.http.{HttpServletRequest => Req}
+  import unfiltered.request.{HttpRequest => Req}
   
   /** @return Some(((user, pass), req)) or None */
-  def unapply(r: Req) = r match {
+  def unapply[T](r: Req[T]) = r match {
     case Authorization(Seq(auth), _) => {
       val tok = new java.util.StringTokenizer(auth)
       tok.nextToken match {

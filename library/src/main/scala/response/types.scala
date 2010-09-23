@@ -1,9 +1,9 @@
 package unfiltered.response
 
-import javax.servlet.http.HttpServletResponse
+
 
 case class ContentType(content_type: String) extends Responder {
-  def respond(res: HttpServletResponse) {
+  def respond[T](res: HttpResponse[T]) {
     res.setContentType("%s; charset=%s".format(content_type, charset))
   }
   def charset = "utf-8"

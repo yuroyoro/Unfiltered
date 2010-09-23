@@ -1,25 +1,19 @@
 package unfiltered.request
 
-import unfiltered.response.ResponsePackage.ResponseFunction
-import javax.servlet.http.HttpServletRequest
+import unfiltered.response.ResponseFunction
 
 /** Basic parameter acess, and a pattern matching extractor in Extract. */
 object Params {
-  /** Dress a Java Enumeration in Scala Iterator clothing */
-  case class JEnumerationIterator[T](e: java.util.Enumeration[T]) extends Iterator[T] {
-    def hasNext: Boolean =  e.hasMoreElements()
-    def next: T = e.nextElement()
-  }
   type Map = scala.collection.Map[String, Seq[String]]
   /**
    * Given a req, extract the request params into a (Map[String, Seq[String]], request).
    * The Map is assigned a default value of Nil, so param("p") would return Nil if there
    * is no such parameter, or (as normal for servlets) a single empty string if the
    * parameter was supplied without a value. */
-  def unapply(req: HttpServletRequest) = {
-    val names = JEnumerationIterator[String](req.getParameterNames.asInstanceOf[java.util.Enumeration[String]])
+  def unapply[T](req: HttpRequest[T]) = {
+    val names = req.parameterNames
     Some(((Map.empty[String, Seq[String]] /: names) ((m, n) =>
-        m + (n -> req.getParameterValues(n))
+        m + (n -> req.parameterValues(n))
       )).withDefaultValue(Nil), req)
   }
 
@@ -141,22 +135,22 @@ object QParams {
     Right(Some(xs))
 
   /** Promote c to an error reporter that fails if Some input is discarded */
-  def watch[E,A,B](c: Option[A] => Option[B], err: E): Reporter[E,A,B] = {
+  def watch[E,A,B](c: Option[A] => Option[B], err: A => E): Reporter[E,A,B] = {
     case None => Right(None)
-    case oa => c(oa).map { b => Right(Some(b)) } getOrElse Left(err)
+    case Some(a) => c(Some(a)).map { b => Right(Some(b)) } getOrElse Left(err(a))
   }
 
   /** Convert a predicate into an error reporter */
-  def pred[E,A](p: A => Boolean)(err: E): Reporter[E,A,A] =
+  def pred[E,A](p: A => Boolean)(err: A => E): Reporter[E,A,A] =
     watch({_ filter p}, err)
 
   /** Convert f into an error reporter that never reports errors */
   def ignore[E,A](f: Option[A] => Option[A]): Reporter[E,A,A] = 
     opt => Right(f(opt))
 
-  def int[E](e: E) = watch(Params.int, e)
-  def even[E](e: E) = watch(Params.even, e)
-  def odd[E](e: E) = watch(Params.odd, e)
+  def int[E](e: String => E) = watch(Params.int, e)
+  def even[E](e: Int => E) = watch(Params.even, e)
+  def odd[E](e: Int => E) = watch(Params.odd, e)
   def trimmed[E] = ignore[E,String](Params.trimmed)
-  def nonempty[E](e: E) = watch(Params.nonempty, e)
+  def nonempty[E](e: E) = watch(Params.nonempty, (s: String) => e)
 }

@@ -2,14 +2,14 @@ package unfiltered.request
 
 import org.specs._
 
-object JsonpSpec extends Specification  with unfiltered.spec.Served {
+object JsonpSpec extends Specification  with unfiltered.spec.jetty.Served {
   import unfiltered.response._
   import unfiltered.request._
   import unfiltered.request.{Path => UFPath}
   
   import dispatch._
 
-  class TestPlan extends unfiltered.Planify({
+  class TestPlan extends unfiltered.filter.Planify({
     case GET(UFPath("/jsonp/with-callback", Jsonp(cb, _))) => ResponseString(cb.wrap("[42]"))
     case GET(UFPath("/jsonp/with-optional-callback", Jsonp.Optional(cb, _))) => ResponseString(cb.wrap("[42]"))
     case _ => ResponseString("bad req")

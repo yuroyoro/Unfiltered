@@ -1,9 +1,7 @@
-package unfiltered.requset
-
-import javax.servlet.http.HttpServletRequest
+package unfiltered.request
 
 object HTTPS {
-  def unapply(req: HttpServletRequest) = 
-    if (req.getProtocol.equalsIgnoreCase("HTTPS")) Some(req)
+  def unapply[T](req: HttpRequest[T]) = 
+    if (req.protocol.equalsIgnoreCase("HTTPS")) Some(req)
     else None
 }
