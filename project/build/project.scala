@@ -35,6 +35,10 @@ class Unfiltered(info: ProjectInfo) extends ParentProject(info) with posterous.P
     val io = "commons-io" % "commons-io" % "1.4"
     val fileupload = "commons-fileupload" % "commons-fileupload" % "1.2.1"
   }, filter_p)
+  lazy val xmpp = project("xmpp", "Unfiltered XMPP", new UnfilteredModule(_) with 
+      IntegrationTesting {
+    val io = "commons-io" % "commons-io" % "1.4"
+  }, library)
   /** Base module for Unfiltered library and servers */
   lazy val util = project("util", "Unfiltered Utils", new UnfilteredModule(_))
   val jetty_version = "7.1.6.v20100715"
