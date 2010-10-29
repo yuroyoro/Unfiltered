@@ -1,19 +1,28 @@
 package unfiltered.netty
 
 import unfiltered.JIteratorIterator
-import unfiltered.response.HttpResponse
+import unfiltered.response.{ResponseFunction, HttpResponse}
 import unfiltered.request.{HttpRequest,POST,RequestContentType,Charset}
 import java.net.URLDecoder
 import org.jboss.netty.handler.codec.http._
 import java.io._
-import org.jboss.netty.buffer.{ChannelBuffers, ChannelBufferOutputStream, ChannelBufferInputStream}
+import org.jboss.netty.buffer.{ChannelBuffers, ChannelBufferOutputStream, 
+  ChannelBufferInputStream}
+import org.jboss.netty.channel._
+import org.jboss.netty.handler.codec.http.HttpVersion._
+import org.jboss.netty.handler.codec.http.HttpResponseStatus._
+import org.jboss.netty.handler.codec.http.{HttpResponse=>NHttpResponse,
+                                           HttpRequest=>NHttpRequest}
+import java.nio.charset.{Charset => JNIOCharset}
+import unfiltered.Cookie
+import unfiltered.util.NonNull
 
 object HttpConfig {
    val DEFAULT_CHARSET = "UTF-8"
 }
 
-private [netty] class RequestBinding(req: DefaultHttpRequest) extends HttpRequest(req) {
-
+private [netty] class RequestBinding(msg: ReceivedMessage) extends HttpRequest(msg) {
+  private val req = msg.request
   lazy val params = queryParams ++ postParams
   def queryParams = req.getUri.split("\\?", 2) match {
     case Array(_, qs) => URLParser.urldecode(qs)
@@ -21,7 +30,7 @@ private [netty] class RequestBinding(req: DefaultHttpRequest) extends HttpReques
   }
   def postParams = this match {
     case POST(RequestContentType(ct, _)) if ct.contains("application/x-www-form-urlencoded") =>
-      URLParser.urldecode(req.getContent.toString(charset))
+      URLParser.urldecode(req.getContent.toString(JNIOCharset.forName(charset)))
     case _ => Map.empty[String,Seq[String]]
   }
 
@@ -44,14 +53,70 @@ private [netty] class RequestBinding(req: DefaultHttpRequest) extends HttpReques
   def requestURI = req.getUri.split('?').toList.head
   def contextPath = "" // No contexts here
 
-  lazy val parameterNames = params.keySet.elements
+  def parameterNames = params.keySet.elements
   def parameterValues(param: String) = params(param)
 
   def headers(name: String) = new JIteratorIterator(req.getHeaders(name).iterator)
+  
+  lazy val cookies = {
+    import org.jboss.netty.handler.codec.http.{Cookie => NCookie, CookieDecoder}
+    import unfiltered.Cookie
+    val cookieString = req.getHeader(HttpHeaders.Names.COOKIE);
+    if (cookieString != null) {
+      val cookieDecoder = new CookieDecoder
+      val decCookies = Set(cookieDecoder.decode(cookieString).toArray(new Array[NCookie](0)): _*)
+      (List[Cookie]() /: decCookies)((l, c) => 
+        Cookie(c.getName, c.getValue, NonNull(c.getDomain), NonNull(c.getPath), NonNull(c.getMaxAge), NonNull(c.isSecure)) :: l)  
+    } else {
+      Nil
+    }
+  }
+}
+/** Extension of basic request binding to expose Netty-specific attributes */
+case class ReceivedMessage(
+  request: DefaultHttpRequest, 
+  context: ChannelHandlerContext,
+  event: MessageEvent) {
+  import org.jboss.netty.handler.codec.http.{HttpResponse => NHttpResponse}
+
+  /** Binds a Netty HttpResponse res to Unfiltered's HttpResponse to apply any
+   * response function to it. */
+  def response[T <: NHttpResponse](res: T)(rf: ResponseFunction[T]) =
+    rf(new ResponseBinding(res)).underlying
+
+  /** @return a new Netty DefaultHttpResponse bound to an Unfiltered HttpResponse */
+  val defaultResponse = response(new DefaultHttpResponse(HTTP_1_1, OK))_
+  /** Applies rf to a new `defaultResponse` and writes it out */
+  def respond(rf: ResponseFunction[NHttpResponse]) = {
+    val ch = request.getHeader("Connection")
+    val keepAlive = request.getProtocolVersion match {
+      case HTTP_1_1 => !"close".equalsIgnoreCase(ch)
+      case HTTP_1_0 => "Keep-Alive".equals(ch)
+    }
+    val closer = new unfiltered.response.Responder[NHttpResponse] {
+      def respond(res: HttpResponse[NHttpResponse]) {
+        res.getOutputStream.close()
+        (
+          if (keepAlive)
+            unfiltered.response.Connection("Keep-Alive") ~>
+            unfiltered.response.ContentLength(
+              res.underlying.getContent().readableBytes().toString)
+          else unfiltered.response.Connection("close")
+        )(res)
+      }
+    }
+    val future = event.getChannel.write(
+      defaultResponse(
+        unfiltered.response.Server("Scala Netty Unfiltered Server") ~> rf ~> closer 
+      )
+    )
+    if (!keepAlive)
+      future.addListener(ChannelFutureListener.CLOSE)
+  }
 }
 
-private [netty] class ResponseBinding(res: DefaultHttpResponse) extends HttpResponse(res) {
-
+private [netty] class ResponseBinding[U <: NHttpResponse](res: U) 
+    extends HttpResponse(res) {
   private lazy val outputStream = new ByteArrayOutputStream {
     override def close = {
       res.setContent(ChannelBuffers.copiedBuffer(this.toByteArray))
@@ -70,6 +135,22 @@ private [netty] class ResponseBinding(res: DefaultHttpResponse) extends HttpResp
 
   def getWriter() = writer
   def getOutputStream() = outputStream
+  
+  def cookies(resCookies: Seq[Cookie]) = {
+    import org.jboss.netty.handler.codec.http.{DefaultCookie, CookieEncoder}
+    if(!resCookies.isEmpty) {
+      val cookieEncoder = new CookieEncoder(true)
+      resCookies.foreach { c =>
+        val nc = new DefaultCookie(c.name, c.value)
+        if(c.domain.isDefined) nc.setDomain(c.domain.get)
+        if(c.path.isDefined) nc.setPath(c.path.get)
+        if(c.maxAge.isDefined) nc.setMaxAge(c.maxAge.get)
+        if(c.secure.isDefined) nc.setSecure(c.secure.get)
+        cookieEncoder.addCookie(nc)
+      }
+      res.addHeader(HttpHeaders.Names.SET_COOKIE, cookieEncoder.encode)
+    }
+  }
 }
 
 private [netty] object URLParser {
