@@ -14,7 +14,7 @@ object Params {
     val names = req.parameterNames
     Some(((Map.empty[String, Seq[String]] /: names) ((m, n) =>
         m + (n -> req.parameterValues(n))
-      )).withDefaultValue(Nil), req)
+      )).withDefaultValue(Nil))
   }
 
   /**
@@ -34,15 +34,16 @@ object Params {
   class Extract[E,T](f: Map => Option[T]) {
     def this(name: String, f: Seq[String] => Option[T]) =
       this({ params: Map => f(params(name)) })
-    def unapply(params: Map) = f(params) map {
-      (_, params)
-    }
+    def unapply(params: Map) = f(params)
   }
   def pred[E,A](p: A => Boolean): Option[A] => Option[A] =
     opt => opt filter p
 
   def int(os: Option[String]) = 
     try { os map { _.toInt } } catch { case _ => None }
+
+  def long(os: Option[String]) = 
+    try { os map { _.toLong } } catch { case _ => None }
 
   val even = pred { (_:Int) % 2 == 0 }
   val odd = pred { (_:Int) % 2 == 1 }
@@ -119,10 +120,18 @@ object QParams {
     def apply(params: Params.Map) = exec(params, None, Nil)._3
   }
 
+  /** Create a validion token from a named value from the input Params.Map */
   def lookup[E](key: String): QueryM[E,Option[String]] =
     QueryM {
       (params, _, log0) =>
         (Some(key), log0, params.get(key).flatMap { _.firstOption })
+    }
+
+  /** Create and name a validation token for an external input */
+  def external[E, A](key: String, value: Option[A]): QueryM[E,Option[A]] =
+    QueryM {
+      (params, _, log0) =>
+        (Some(key), log0, value)
     }
 
   /* Functions that are useful arguments to QueryM.is */
@@ -141,7 +150,7 @@ object QParams {
   }
 
   /** Convert a predicate into an error reporter */
-  def pred[E,A](p: A => Boolean)(err: A => E): Reporter[E,A,A] =
+  def pred[E,A](p: A => Boolean, err: A => E): Reporter[E,A,A] =
     watch({_ filter p}, err)
 
   /** Convert f into an error reporter that never reports errors */
@@ -149,6 +158,7 @@ object QParams {
     opt => Right(f(opt))
 
   def int[E](e: String => E) = watch(Params.int, e)
+  def long[E](e: String => E) = watch(Params.long, e)
   def even[E](e: Int => E) = watch(Params.even, e)
   def odd[E](e: Int => E) = watch(Params.odd, e)
   def trimmed[E] = ignore[E,String](Params.trimmed)

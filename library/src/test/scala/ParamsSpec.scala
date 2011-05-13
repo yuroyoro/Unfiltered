@@ -21,20 +21,20 @@ trait ParamsSpec extends unfiltered.spec.Hosted {
   object Number extends Params.Extract("number", Params.first ~> Params.int)
 
   def intent[A,B]: unfiltered.Cycle.Intent[A,B] = {
-    case UFPath("/basic", Params(params, _)) => params("foo") match {
+    case UFPath("/basic") & Params(params) => params("foo") match {
       case Seq(foo) => ResponseString("foo is %s" format foo)
       case _ =>  ResponseString("what's foo?")
     }
 
-    case POST(UFPath("/extract", Params(Number(num, _), _))) =>
+    case POST(UFPath("/extract") & Params(Number(num))) =>
       ResponseString(num.toString)
 
-    case POST(UFPath("/extract",_)) =>
+    case POST(UFPath("/extract")) =>
       ResponseString("passed")
 
     // QParam test paths:
 
-    case GET(UFPath("/int", Params(params, _))) =>
+    case GET(UFPath("/int") & Params(params)) =>
       val expected = for {
         even <- lookup("number") is(int(_ => ()))
       } yield ResponseString(even.get.toString)
@@ -44,10 +44,10 @@ trait ParamsSpec extends unfiltered.spec.Hosted {
         )
       }
 
-    case GET(UFPath("/even", Params(params, _))) => 
+    case GET(UFPath("/even") & Params(params)) => 
       val expected = for {
         even <- lookup("number") is(int(in => "%s is not a number".format(in))) is 
-          (pred { (_: Int) % 2 == 0} { i => "%d is odd".format(i) }) is(required("missing"))
+          (pred( _ % 2 == 0, i => "%d is odd".format(i) )) is(required("missing"))
         whatever <- lookup("what") is(required("bad"))
       } yield ResponseString(even.get.toString)
       expected(params) orFail { fails =>
@@ -56,13 +56,16 @@ trait ParamsSpec extends unfiltered.spec.Hosted {
         )
       }
     
-    case GET(UFPath("/str", Params(params, _))) => 
+    case request @ GET(UFPath("/str") & Params(params)) => 
       val expected = for {
         str <- lookup("param") is(int(_ => 400)) is(optional[Int,Int]) // note: 2.8 can infer type on optional
         req <- lookup("req") is(required(400))
+        agent <- external("UA", UserAgent(request).firstOption) is
+                 required(400)
       } yield ResponseString(str.get.getOrElse(0).toString)
       expected(params) orFail { fails =>
-        BadRequest ~> Status(fails.head.error) ~> ResponseString("fail")
+        BadRequest ~> Status(fails.head.error) ~> 
+          ResponseString(fails.map { _.name }.mkString("+"))
       }
   }
   
@@ -103,14 +106,18 @@ trait ParamsSpec extends unfiltered.spec.Hosted {
     "fail on not present" in {
       Http.when(_ == 400)(host / "even" as_str) must_=="number:missing,what:bad"
     }
+    val strpoint = host / "str" <:< Map("User-Agent" -> "Tester")
     "return zero if param no int" in {
-      Http(host / "str" <<? Map("req"->"whew") as_str) must_=="0"
+      Http(strpoint <<? Map("req"->"whew") as_str) must_=="0"
     }
     "fail 400 if param not an int" in {
-      Http.when(_ == 400)(host / "str" <<? Map("param" -> "one", "req"->"whew") as_str) must_=="fail"
+      Http.when(_ == 400)(strpoint <<? Map("param" -> "one", "req"->"whew") as_str) must_=="param"
     }
     "return optional param if an int" in {
-      Http(host / "str" <<? Map("param"->"2","req"->"whew") as_str) must_=="2"
+      Http(strpoint <<? Map("param"->"2","req"->"whew") as_str) must_=="2"
+    }
+    "fail if missing user-agent header" in {
+      Http.when(_ == 400)(host / "str" <<? Map("req"->"whew") as_str) must_=="UA"
     }
   }
 }

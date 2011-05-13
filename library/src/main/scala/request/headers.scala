@@ -12,9 +12,10 @@ class RequestHeader(val name: String) {
     
     headers(req.headers(name)) match {
       case Nil => None
-      case hs => Some(hs, req)
+      case hs => Some(hs)
     }
   }
+  def apply[T](req: HttpRequest[T]) = req.headers(name).toList
 }
 
 // http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.10
@@ -42,6 +43,7 @@ object TE extends RequestHeader("TE")
 object Upgrade extends RequestHeader("Upgrade")
 object UserAgent extends RequestHeader("User-Agent")
 object Via extends RequestHeader("Via")
+object XForwardedFor extends RequestHeader("X-Forwarded-For") 
 
 object Charset {
   val Setting = """.*;.*\bcharset=(\S+).*""".r
