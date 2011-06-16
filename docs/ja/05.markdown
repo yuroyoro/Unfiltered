@@ -1,0 +1,7 @@
+コミュニティ
+------------------
+
+Unfilteredは [GitHub][gh] に棲息していて、ほとんどの機能追加やバグフィックスはここから発生する。また、 [メーリングリスト][nabble] だってある。
+
+[gh]: https://github.com/n8han/unfiltered
+[nabble]: http://databinder.3617998.n2.nabble.com/Unfiltered-f5560764.html

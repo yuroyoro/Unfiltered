@@ -1,0 +1,122 @@
+パターンマッチングの落とし穴
+--------------------------------------------------
+<!--
+Java methods have a finite size, and the Scala compiler generates very
+large methods for complex pattern matching. It can be surprisingly
+easy to hit Java's limit and produce and exception in compilation. There
+is [an open bug][1133] to address the problem in Scala.
+-->
+
+Javaのメソッドのサイズは上限が決まっていて、Scalaコンパイラは複雑なパターンマッチングでものっそい巨大なメソッドを生成する。驚くほど簡単にJavaの上限に達してしまい、コンパイル時に例外が発生するんだ。これは [未解決のバグ][1133] で、Scalaの問題として述べられている。
+
+[1133]: https://lampsvn.epfl.ch/trac/scala/ticket/1133
+
+<!--
+There are several techniques for avoiding this limitation when writing
+Unfiltered applications. One is to restructure matches so that common
+cases are handled in one case, and differentiated in subsequent
+matches. Instead of this:
+-->
+Unfilteredアプリケーションを書くときには、いくつかのテクニックでこの制限を回避できる。そのひとつは、共通のcaseはひとつのcaseになるようマッチングを再構築することだ。そして、いくつかのサブシーケンスに分けるようにする。こう書くかわりに
+
+
+```scala
+case ConditionA(Condition1(req)) => ...
+case ConditionA(Condition2(req)) => ...
+```
+こんな風に書いた方がいい。
+
+```scala
+case ConditionA(req) => req match {
+  case Condition1(_) => ...
+  case Condition2(_) => ...
+  case _ => Pass
+}
+```
+<!--
+Another technique is to break up your cases into logical, named
+groups. These can be combined into a single intent.
+-->
+もうひとつのテクニックは、caseを論理的に分割して名前を付けてグループ化する。で、それらをひとつのintentに結合させる。
+
+
+```scala
+val foos = unfiltered.filter.Intent {
+  case ConditionA(Condition1(req)) => ...
+  case ConditionA(Condition2(req)) => ...
+}
+val bars = unfiltered.filter.Intent {
+  case ConditionB(Condition1(req)) => ...
+}
+val fooBar = unfiltered.filter.Planify(foos.orElse(bars))
+```
+<!--
+For larger groupings of functionality, it may be useful to define
+singleton objects holding logically divided intents.
+-->
+機能を大規模なグループに分けるときに、シングルトンオブジェクトを定義して論理的に分割されたintentを持たせるのが便利かもしれない。
+
+
+```scala
+object Foos {
+  import fun.stuff.into.scope._
+  def intent = unfiltered.filter.Intent {
+    case ConditionA(Condition1(req)) => ...
+    case ConditionA(Condition2(req)) => ...
+  }
+}
+object Bars {
+  def intent = unfiltered.filter.Intent {
+    case ConditionB(Condition1(req)) => ...
+  }
+}
+object FooBar extends unfiltered.filter.Plan {
+  def intent = Foos.intent.orElse(Bars.intent)
+}
+```
+<!--
+You could also make use of separate plans, to be chained together by
+the server.
+-->
+また、サーバー毎に接続するplanを分割することもできる。
+
+
+```scala
+object Foos extends unfiltered.filter.Plan {
+  import fun.stuff.into.scope._
+  def intent = {
+    case ConditionA(Condition1(req)) => ...
+    case ConditionA(Condition2(req)) => ...
+  }
+}
+object Bars extends unfiltered.filter.Plan {
+  def intent = {
+    case ConditionB(Condition1(req)) => ...
+  }
+}
+```
+<!--
+And lastly, if there is no logical way to divide up a partial function
+that is large enough to cause a compilation error, you can always
+split it arbitrarily with default cases:
+-->
+最後に、もし論理的にpartial-functionを分割する手段がないなら、デフォルトのcaseで受けてから任意のcaseにわけるって手があるよ。
+
+```scala
+def intent = {
+  case ConditionA(Condition1(req)) => ...
+  case ConditionA(Condition2(req)) => ...
+  case req => req match => {
+    case ConditionB(Condition1(req)) => ...
+    case _ => Pass
+  }
+}
+```
+<!--
+Be aware that this last intent is *defined* for all requests. Because it
+includes a top-level default case, its `orElse` method will never call
+a partial function passed to it. The `Pass` object however will instruct
+a plan to treat requests that fall to the end as non-matching.
+-->
+
+この最後のintentは、すべてのリクエストに対して *定義されている* なぜなら、トップレベルのデフォルトcaseを持っているので、その `orElse` メソッドに渡されたpartial-functionは決して呼び出されることはないんだ。 だけど、 `Pass` オブジェクトはplanに対してリクエストがマッチしなくなる最後までちゃんと扱われるように指示する。

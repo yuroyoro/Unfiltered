@@ -1,0 +1,7 @@
+Unfiltered
+==========
+
+*Unfiltered* はScalaでHTTPリクエストをサービスするためのツールキットだ。様々なバックエンドに対して、リクエストを処理するための一貫したボキャブラリーを提供する。しかも、ネイティブなインタフェースに直接アクセスすることも邪魔しない。
+
+
+> [Version $version$ Release Notes](http://implicit.ly/unfiltered-$vrsn$)

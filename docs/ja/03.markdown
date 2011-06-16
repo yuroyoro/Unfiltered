@@ -1,0 +1,58 @@
+BindingsとServers
+--------------------
+
+コアとなるUnfilteredのライブラリは、いかなるサーバー実装に依存しないし参照もしない。内部は抽象化されたリクエストとレスポンスによって定義され、高いレベルで抽象化されている。
+
+アプリケーションやライブラリがコア・ライブラリにのみ依存するようになっていれば、Unfilteredがサポートするどんなバックエンド上でも動かすことができるってワケだ。が、ほとんどの場合は *binding* モジュールに依存するだろう。
+
+### Binding モジュール
+
+こいつらはUnfilteredの一般的なリクエストとレスポンスのインタフェースを特定の実装に結びつける。intentやplanも同様にだ。
+
+#### Servlet Filters (unfiltered-filter)
+
+"Java Servlet API" はアプリケーションをTomcatやGoogle App Engineのようなサーブレットコンテナ上で実行させることを可能とする。この場合のplanトレイトは、サーブレットフィルターとなる。
+
+#### Netty Channels (unfiltered-netty)
+
+NettyはネットワークI/Oのために、 "Java Native I/O(NIO)"で実装された *channel* インターフェースを定義している。planは、upstream-channelハンドラーになっていて、planとintentはサブパッケージとして分割された`cycle`パッケージと`channel`パッケージにそれぞれ定義される。前者は古典的なリクエスト-レスポンス-サイクルのためのもので、後者はより自由な接続のためのものとなる。
+
+### Server モジュール
+
+Serverモジュールはplanを実行するためのサーバー環境を定義するものだ。これは完全にオプショナルだ。アプリケーションは、Unfilteredのbindingモジュールを外部のコンテナと一緒に使うことも、直接サーバーのライブラリにインタフェースすることもできる。
+
+#### unfiltered-jetty
+
+HTTP/HTTPSプロトコルを実装したJettyサーバーのためのbuilderを含む。このサーバーでは、ローカルプロセスに対してウェブブラウザを用いたインタフェースをきわめて簡単に提供できる。
+もしJava6以降を使ってるなら、ブラウザを開くショートカットだって使える。
+
+```scala
+import unfiltered.request._
+import unfiltered.response._
+val hello = unfiltered.filter.Planify {
+   case _ => ResponseString("hello world")
+}
+unfiltered.jetty.Http.anylocal.filter(hello).run { s =>
+  unfiltered.util.Browser.open(
+      "http://127.0.0.1:%d/".format(s.port)
+  )
+}
+```
+#### unfiltered-jetty-ajp
+
+[Apache JServ Protocol][ajp] - Webリクエストをプロキシするためのバイナリプロトコル - で設定されたJettyサーバ
+
+[ajp]: http://en.wikipedia.org/wiki/Apache_JServ_Protocol
+
+#### unfiltered-netty-server
+
+planやintentをchannelハンドラーとしてバインドしてNettyを起動する
+
+```scala
+import unfiltered.request._
+import unfiltered.response._
+val hello = unfiltered.netty.cycle.Planify {
+   case _ => ResponseString("hello world")
+}
+unfiltered.netty.Http(8080).handler(hello).run()
+```

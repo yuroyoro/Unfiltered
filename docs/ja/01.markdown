@@ -1,0 +1,87 @@
+Unfiltered を試す
+----------------------------
+
+ScalaのコンソールでUnfilteredを使いながらリクエストハンドラーを書くのは簡単だ。面倒なところはすべてクラスパスの中にあるからね。
+
+
+### Play Project
+
+ここでは、[giter8][g8] を使うアプローチをお勧めするぜ。このツールはGithubにあるテンプレートからプロジェクトをセットアップするためのものだ。
+もしgiter8をまだインストールしてなくて、ネットワークに繋がったLinuxかMacだったら、簡単に試すことができる。
+
+[g8]: https://github.com/n8han/giter8#readme
+
+    curl https://raw.github.com/n8han/conscript/master/setup.sh | sh
+
+これは[conscript][conscript]というものだ。 この`setup.sh`では、実行可能なスクリプトを`~/bin/cs`に(君が消してしまわない限り)配置する。`~/bin` を実行パスに設定しておくのがポイントだ。ここではその方法は説明しないけれどね。
+
+(訳注) 2011/6/14現在、このconscriptは上手く動かない。patchを当てたやつがあるので、こっちで試してみてくれ(by yuroyoro)
+
+    curl https://raw.github.com/yuroyoro/conscript/master/setup.sh | sh
+
+[conscript]: https://github.com/n8han/conscript#readme
+
+    ~/bin/cs n8han/giter8
+
+これで `g8` はインストールされる。これでgiter8を実行させるスクリプトを手に入れたってワケだ。次は、カレントディレクトリに新しいプロジェクトを作ってみよう。
+
+    ~/bin/g8 softprops/unfiltered --name=justplayin
+
+オーケー、最後に、このプロジェクトでUnfilteredのコンソールを起動するためにsbtを使える。[sbt setup][sbt] はやってあるよね?
+
+
+[sbt]: http://code.google.com/p/simple-build-tool/wiki/Setup
+
+    cd justplayin
+    sbt update console
+
+### Consoled
+
+
+
+今、`scala>` ってプロンプトがあって、クラスパスには`unfiltered-filter` と `unfiltered-jetty` モジュールが通っているハズだ。さあ、楽しもうぜ?
+
+```scala
+import unfiltered.request._
+import unfiltered.response._
+val echo = unfiltered.filter.Planify {
+   case Path(Seg(p :: Nil)) => ResponseString(p)
+}
+```
+この `echo` フィルターはどんなサーブレットコンテナでも動くはずだ。
+とりあえず今はJettyサーバーを使ってみよう。
+
+```scala
+unfiltered.jetty.Http.anylocal.filter(echo).run()
+```
+起動メッセージでどのポート番号が使われたのか表示され、デフォルトで 127.0.0.1からのリクエストのみを受け付けるようになる。同じマシンから、こんな風にリクエストをサーバに送ることができるよ。
+
+    curl http://127.0.0.1:<ポート番号>/hello+world
+
+好みのウェブブラウザでも同じように動く。でも、フィルターがリクエストに対してレスポンスを返すのは、正確にひとつのパス階層を指定したときだけだってことに注意してくれ。もしルートパスやより深いパスを指定したときは、 `echo` フィルターはリクエストを処理せず、Jettyが404ページを返すだろう。
+
+どんなリクエストも処理させたいってんなら、パターンマッチの式を拡張すればいい。
+(エンターを押せば起動中のサーバーは止まる）。
+
+```scala
+val echoNice = unfiltered.filter.Planify {
+   case Path(Seg(p :: Nil)) => ResponseString(p)
+   case _ => ResponseString(
+       "I can echo exactly one path element."
+   )
+}
+unfiltered.jetty.Http.anylocal.filter(echoNice).run()
+```
+または、別なフィルターを定義して最初のヤツにつなげてもいい。
+
+```scala
+val nice = unfiltered.filter.Planify {
+   case _ => ResponseString(
+       "I can echo exactly one path element."
+   )
+}
+unfiltered.jetty.Http.anylocal.filter(echo).filter(nice).run()
+```
+
+簡単だろ?
+

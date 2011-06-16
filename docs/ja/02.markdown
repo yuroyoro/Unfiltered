@@ -1,0 +1,40 @@
+PlansとIntents
+-----------------
+
+Unfilteredでは、partial-function による条件判断をもとにリクエストを処理する。アプリケーションの視点では、リクエストはパターンマッチングによってコードに結びつけられる。
+ライブラリでは特定のボキャブラリーを使ってこの処理を行うagentに問い合わせることによって、曖昧さを無くしているんだ。
+
+* *intent* リクエストに対するpartial-functionだ。
+* *plan* は、 intent を特定のサーバーのインターフェースに結びつける。
+
+
+例えば、 `unfiltered.filter.Plan` トレイトは `javax.servlet.Filter` インターフェースを継承している。 これは、 クライアントにpartial-fuctionでintentを定義させるための抽象メソッド `intent` を持つ。
+
+### PlanとIntentを作成する
+
+前のページの例に戻ってみると、どこからplanが終わってintentが開始しているか疑問に思うかもしれないな。
+
+```scala
+import unfiltered.request._
+import unfiltered.response._
+val echo = unfiltered.filter.Planify {
+   case Path(Seg(p :: Nil)) => ResponseString(p)
+}
+```
+この場合は、planは無名のpartial-function —— この関数はintentだ——
+から直接生成される。また、より明示的にplanを宣言することもできる。これはより大きなアプリケーションで必要になるだろう。
+
+
+```scala
+object Echo extends unfiltered.filter.Plan {
+  def intent = {
+    case Path(Seg(p :: Nil)) => ResponseString(p)
+  }
+}
+```
+これまで、この種類のplanはサーブレットフィルターのインターフェースとして実装されるので、そのままサーブレットコンテナに渡すことができる。
+
+```scala
+unfiltered.jetty.Http.anylocal.filter(Echo).run()
+```
+もしplanがリクエストを処理できないなら、サーバーは次のplanにリクエストをchainするか、固有のエラーをレスポンスと返すだろう。

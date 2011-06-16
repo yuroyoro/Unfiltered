@@ -1,0 +1,47 @@
+プロジェクトのセットアップ
+----------------------------------------------------
+
+
+### モジュールとアーティファクト
+
+Unfilteredのコア、binding、serverとその他のモジュールは、基礎となる依存関係への参照を持って公開されているので、アプリケーションが明示的に必要とするのは、Unfilteredとその他のトップレベルの依存関係だけだ。気をつけなければならないのは、serverモジュールとbindingモジュールは、相互依存ではないってことだ。例えば、unfiltered-jettyを使うときにはunfiltered-filterも必要になる。
+
+
+それぞれのモジュールは、いくつかのScalaのバージョンに対して [cross-built][sbt] されて [scala-tools][st] リポジトリに  "net.databinder" ってorganization-idで公開されてる。モジュールは対象となるScalaのバージョンが付与されてるので、完全なアーティファクト名はこんな風になるんだ。
+
+* unfiltered_$scala$
+* unfiltered-filter_$scala$
+* unfiltered-netty_$scala$
+* unfiltered-websockets_$scala$
+* unfiltered-jetty_$scala$
+* unfiltered-jetty-ajp_$scala$
+* unfiltered-netty-server_$scala$
+* unfiltered-uploads_$scala$
+* unfiltered-utils_$scala$
+* unfiltered-spec_$scala$
+* unfiltered-scalatest_$scala$
+* unfiltered-json_$scala$
+* unfiltered-scalate_$scala$
+* unfiltered-oauth_$scala$
+
+[st]: http://scala-tools.org/repo-releases/net/databinder/
+[sbt]: http://code.google.com/p/simple-build-tool/wiki/CrossBuild
+
+### ビルドツール
+
+**simple-build-tool** では、プロジェクトで使用するScalaのバージョンを [自動的に指定][sbt] する簡単な方法があるんだ。
+sbt 0.7.4 のプロジェクトでは
+
+```scala
+val uf_filter = "net.databinder" %% "unfiltered-filter" % "$version$"
+```
+
+**Maven** では、完全なアーティファクト名を指定する。
+
+```xml
+<dependency>
+  <groupId>net.databinder</groupId>
+  <artifactId>unfiltered-filter_$scala$</artifactId>
+  <version>$version$</version>
+</dependency>
+```

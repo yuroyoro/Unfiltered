@@ -139,4 +139,8 @@ class Unfiltered(info: ProjectInfo) extends ParentProject(info)
   val publishTo = "Scala Tools Nexus" at
     "http://nexus.scala-tools.org/content/repositories/releases/"
   Credentials(Path.userHome / ".ivy2" / ".credentials", log)
+
+  override def pamfletDocs = path("docs") /  "ja"
+  override def pamfletOutput = outputPath / "docs" / "ja"
+
 }
